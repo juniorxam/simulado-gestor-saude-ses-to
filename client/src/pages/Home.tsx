@@ -1,5 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
-import { BarChart3, BookOpenCheck, Brain, CheckCircle2, ChevronLeft, ChevronRight, CircleHelp, Clock3, FileText, Flag, Gauge, LayoutDashboard, ListChecks, RotateCcw, Settings2, Sparkles, Target, Timer, XCircle } from "lucide-react";
+import { useAuth } from "@/_core/hooks/useAuth";
+import { startLogin } from "@/const";
+import { trpc } from "@/lib/trpc";
+import { shouldPreferLocalProgress } from "@/lib/progressSync";
+import { BarChart3, BookOpenCheck, Brain, CheckCircle2, ChevronLeft, ChevronRight, CircleHelp, Clock3, FileText, Flag, Gauge, LayoutDashboard, ListChecks, Loader2, LogIn, LogOut, RotateCcw, Settings2, Sparkles, Target, XCircle } from "lucide-react";
 import { Bar, BarChart, CartesianGrid, Cell, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -78,6 +82,9 @@ const initialStore = () => {
 
 export default function Home(){
   const saved = useMemo(initialStore, []);
+  const { user, loading: authLoading, isAuthenticated, logout } = useAuth();
+  const progressQuery = trpc.progress.get.useQuery(undefined, { enabled: isAuthenticated, retry: false });
+  const saveProgress = trpc.progress.save.useMutation();
   const [view,setView] = useState<"dashboard"|"simulado"|"desempenho"|"erros"|"fontes">(saved?.view || "dashboard");
   const [current,setCurrent] = useState<number>(saved?.current || 0);
   const [answers,setAnswers] = useState<Record<number,Answer>>(saved?.answers || {});
@@ -86,8 +93,61 @@ export default function Home(){
   const [selected,setSelected] = useState<number|null>(saved?.selected ?? null);
   const [startTime,setStartTime] = useState<number>(saved?.startTime || Date.now());
   const [elapsed,setElapsed] = useState(0);
+  const [localChangedAt,setLocalChangedAt] = useState<number>(saved?.localChangedAt || Date.now());
+  const [cloudLoaded,setCloudLoaded] = useState(false);
+  const [syncStatus,setSyncStatus] = useState<"local"|"loading"|"synced"|"error">("local");
+  const snapshot = useMemo(() => ({view,current,answers,started,showFeedback,selected,startTime,localChangedAt}), [view,current,answers,started,showFeedback,selected,startTime,localChangedAt]);
 
-  useEffect(()=>{ localStorage.setItem("ses-to-simulado",JSON.stringify({view,current,answers,started,showFeedback,selected,startTime})); },[view,current,answers,started,showFeedback,selected,startTime]);
+  useEffect(()=>{ localStorage.setItem("ses-to-simulado",JSON.stringify(snapshot)); },[snapshot]);
+  useEffect(()=>{
+    if (!isAuthenticated || progressQuery.isLoading || cloudLoaded) return;
+    setSyncStatus("loading");
+    if (progressQuery.isError) {
+      setSyncStatus("error");
+      setCloudLoaded(true);
+      toast.error("Não foi possível carregar o progresso em nuvem", { description: "Seu progresso local foi preservado e não será sobrescrito." });
+      return;
+    }
+    if (progressQuery.data?.payload) {
+      try {
+        const remote = JSON.parse(progressQuery.data.payload);
+        const remoteUpdatedAt = progressQuery.data.updatedAt ? new Date(progressQuery.data.updatedAt).getTime() : 0;
+        const localIsNewer = shouldPreferLocalProgress(Number(snapshot.localChangedAt || 0), remoteUpdatedAt, Object.keys(snapshot.answers).length > 0);
+        if (localIsNewer) {
+          saveProgress.mutate({ payload: JSON.stringify(snapshot) }, { onSuccess: () => setSyncStatus("synced"), onError: () => setSyncStatus("error") });
+          setSyncStatus("synced");
+          toast.success("Progresso local mantido", { description: "A versão mais recente deste dispositivo foi sincronizada." });
+        } else if (remote && typeof remote === "object") {
+          if (remote.view) setView(remote.view);
+          if (typeof remote.current === "number") setCurrent(remote.current);
+          if (remote.answers) setAnswers(remote.answers);
+          if (typeof remote.started === "boolean") setStarted(remote.started);
+          if (typeof remote.showFeedback === "boolean") setShowFeedback(remote.showFeedback);
+          if (typeof remote.selected === "number" || remote.selected === null) setSelected(remote.selected);
+          if (typeof remote.startTime === "number") setStartTime(remote.startTime);
+          if (typeof remote.localChangedAt === "number") setLocalChangedAt(remote.localChangedAt);
+          setSyncStatus("synced");
+          toast.success("Progresso sincronizado", { description: "Seu estudo em nuvem foi carregado nesta sessão." });
+        }
+      } catch { setSyncStatus("error"); toast.error("Não foi possível ler o progresso salvo na nuvem."); }
+    } else {
+      saveProgress.mutate({ payload: JSON.stringify(snapshot) }, {
+        onSuccess: () => setSyncStatus("synced"),
+        onError: () => { setSyncStatus("error"); toast.error("Falha ao criar seu progresso em nuvem", { description: "O progresso local foi preservado." }); },
+      });
+    }
+    setCloudLoaded(true);
+  }, [isAuthenticated, progressQuery.isLoading, progressQuery.data, progressQuery.isError, cloudLoaded]);
+  useEffect(()=>{
+    if (!isAuthenticated || !cloudLoaded || syncStatus === "error") return;
+    const timer = window.setTimeout(() => {
+      saveProgress.mutate({ payload: JSON.stringify(snapshot) }, {
+        onSuccess: () => setSyncStatus("synced"),
+        onError: () => { setSyncStatus("error"); toast.error("Falha ao salvar na nuvem", { description: "O progresso continua disponível localmente." }); },
+      });
+    }, 450);
+    return () => window.clearTimeout(timer);
+  }, [snapshot, isAuthenticated, cloudLoaded, syncStatus]);
   useEffect(()=>{ const t=setInterval(()=>setElapsed(Math.floor((Date.now()-startTime)/1000)),1000); return ()=>clearInterval(t); },[startTime]);
 
   const answered = Object.keys(answers).length;
@@ -100,23 +160,23 @@ export default function Home(){
   const pie = [{name:"Acertos",value:correct,color:"#54B99A"},{name:"Erros",value:answered-correct,color:"#D56B62"},{name:"Pendentes",value:50-answered,color:"#DCE8E5"}];
   const formatTime=(s:number)=>`${String(Math.floor(s/60)).padStart(2,"0")}:${String(s%60).padStart(2,"0")}`;
 
-  function begin(){setStarted(true);setView("simulado");setStartTime(Date.now());toast.success("Simulado iniciado",{description:"Responda uma questão por vez. O progresso é salvo automaticamente."});}
-  function choose(i:number){if(showFeedback)return;setSelected(i);}
-  function submit(){if(selected===null)return;const isCorrect=selected===q.correct;setAnswers(prev=>({...prev,[q.id]:{selected,correct:isCorrect,axis:q.axis,topic:q.topic,difficulty:q.difficulty}}));setShowFeedback(true);toast(isCorrect?"Resposta correta":"Resposta registrada",{description:isCorrect?"Excelente. Continue nesse ritmo.":"O erro foi salvo no seu caderno de revisão."});}
-  function next(){setShowFeedback(false);setSelected(null);setCurrent(Math.min(questions.length-1,current+1));}
-  function previous(){setShowFeedback(false);setSelected(null);setCurrent(Math.max(0,current-1));}
-  function reset(){localStorage.removeItem("ses-to-simulado");setAnswers({});setCurrent(0);setStarted(false);setShowFeedback(false);setSelected(null);setView("dashboard");setStartTime(Date.now());toast.success("Progresso reiniciado");}
+  function begin(){setStarted(true);setView("simulado");setStartTime(Date.now());setLocalChangedAt(Date.now());toast.success("Simulado iniciado",{description:"Responda uma questão por vez. O progresso é salvo automaticamente."});}
+  function choose(i:number){if(showFeedback)return;setSelected(i);setLocalChangedAt(Date.now());}
+  function submit(){if(selected===null)return;const isCorrect=selected===q.correct;setAnswers(prev=>({...prev,[q.id]:{selected,correct:isCorrect,axis:q.axis,topic:q.topic,difficulty:q.difficulty}}));setShowFeedback(true);setLocalChangedAt(Date.now());toast(isCorrect?"Resposta correta":"Resposta registrada",{description:isCorrect?"Excelente. Continue nesse ritmo.":"O erro foi salvo no seu caderno de revisão."});}
+  function next(){setShowFeedback(false);setSelected(null);setCurrent(Math.min(questions.length-1,current+1));setLocalChangedAt(Date.now());}
+  function previous(){setShowFeedback(false);setSelected(null);setCurrent(Math.max(0,current-1));setLocalChangedAt(Date.now());}
+  function reset(){localStorage.removeItem("ses-to-simulado");setAnswers({});setCurrent(0);setStarted(false);setShowFeedback(false);setSelected(null);setView("dashboard");setStartTime(Date.now());setLocalChangedAt(Date.now());toast.success("Progresso reiniciado");}
   function go(v:typeof view){setView(v); if(v==="simulado"&&!started)begin();}
 
   return <div className="app-shell">
     <aside className="sidebar">
-      <div className="brand"><img src="/manus-storage/simulado-mark_21799bc9.png" alt=""/><div><span>SIMULADO</span><strong>GESTOR EM SAÚDE</strong></div></div>
+      <div className="brand"><img src="/manus-storage/simulado-mark_3b0fb8a2.png" alt=""/><div><span>SIMULADO</span><strong>GESTOR EM SAÚDE</strong></div></div>
       <div className="exam-tag">SES-TO · 2026</div>
       <nav className="nav">{[["dashboard","Visão geral",LayoutDashboard],["simulado","Simulado",ListChecks],["desempenho","Desempenho",BarChart3],["erros","Caderno de erros",BookOpenCheck],["fontes","Fontes de estudo",FileText]].map(([id,label,Icon])=><button key={id as string} className={view===id?"active":""} onClick={()=>go(id as typeof view)}><Icon size={18}/><span>{label as string}</span>{id==="erros"&&errorList.length>0&&<b>{errorList.length}</b>}</button>)}</nav>
       <div className="sidebar-bottom"><div className="mini-progress"><span>Progresso geral</span><strong>{answered}/50</strong><Progress value={answered/50*100}/></div><button className="reset-link" onClick={reset}><RotateCcw size={15}/> Reiniciar progresso</button></div>
     </aside>
     <main className="main-area">
-      <header className="topbar"><div className="topbar-title"><div className="topbar-mark"><img src="/manus-storage/simulado-mark_21799bc9.png" alt=""/></div><div><span className="eyebrow">PAINEL DE PREPARAÇÃO</span><h1>{view==="dashboard"?"Seu próximo ganho está nos erros recorrentes.":view==="simulado"?"Simulado específico · Questões FGV":view==="desempenho"?"Desempenho por eixo do edital":view==="erros"?"Caderno de erros": "Fontes que sustentam o estudo"}</h1></div></div><div className="top-actions"><div className="time-chip"><Clock3 size={16}/><span>{formatTime(elapsed)}</span></div><Button variant="outline" size="icon" aria-label="Configurações"><Settings2 size={17}/></Button></div></header>
+      <header className="topbar"><div className="topbar-title"><div className="topbar-mark"><img src="/manus-storage/simulado-mark_3b0fb8a2.png" alt=""/></div><div><span className="eyebrow">PAINEL DE PREPARAÇÃO</span><h1>{view==="dashboard"?"Seu próximo ganho está nos erros recorrentes.":view==="simulado"?"Simulado específico · Questões FGV":view==="desempenho"?"Desempenho por eixo do edital":view==="erros"?"Caderno de erros": "Fontes que sustentam o estudo"}</h1></div></div><div className="top-actions"><div className="time-chip"><Clock3 size={16}/><span>{formatTime(elapsed)}</span></div>{authLoading?<Loader2 size={17} className="spin"/>:isAuthenticated?<div className="user-chip"><span>{user?.name || user?.email || "Conta conectada"}</span><button onClick={()=>logout()} aria-label="Sair"><LogOut size={14}/></button></div>:<Button variant="outline" onClick={startLogin}><LogIn size={15}/> Entrar para salvar</Button>}{isAuthenticated&&<span className={`sync-indicator ${syncStatus}`} title="Status da sincronização">{syncStatus==="loading"?"Sincronizando…":syncStatus==="error"?"Não sincronizado":"Sincronizado"}</span>}<Button variant="outline" size="icon" aria-label="Configurações"><Settings2 size={17}/></Button></div></header>
       {view==="dashboard"&&<Dashboard answered={answered} correct={correct} score={score} axisStats={axisStats} pie={pie} begin={begin} go={go} errorList={errorList}/>} 
       {view==="simulado"&&<Quiz q={q} current={current} answers={answers} selected={selected} showFeedback={showFeedback} choose={choose} submit={submit} next={next} previous={previous} score={score} answered={answered} goTo={(index)=>{setCurrent(index);setShowFeedback(Boolean(answers[questions[index].id]));setSelected(answers[questions[index].id]?.selected ?? null);}}/>} 
       {view==="desempenho"&&<Performance axisStats={axisStats} answered={answered} correct={correct} score={score} pie={pie}/>} 
@@ -128,7 +188,7 @@ export default function Home(){
 
 function Dashboard({answered,correct,score,axisStats,pie,begin,go,errorList}:{answered:number;correct:number;score:number;axisStats:any[];pie:any[];begin:()=>void;go:(v:any)=>void;errorList:any[]}){
  return <div className="content"><section className="hero-panel"><div><span className="section-kicker">PLANO DE 50 QUESTÕES</span><h2>Resolver. Corrigir.<br/><em>Revisar com método.</em></h2><p>Uma bateria específica de Gestor em Saúde, dividida em quatro eixos do edital e acompanhada por métricas que mostram o que estudar depois.</p><div className="hero-actions"><Button onClick={begin} className="primary-btn"><Target size={17}/> {answered?`Retomar da questão ${String(Math.min(answered+1,50)).padStart(2,"0")}`:"Resolver questão 01"}</Button><button className="text-btn" onClick={()=>go("fontes")}>Ver fontes oficiais <ChevronRight size={16}/></button></div></div><div className="hero-art"><img src="/manus-storage/health-study-illustration_cbeefe79.png" alt="Ilustração editorial de estudo em saúde"/></div></section>
- <section className="stat-grid"><div className="stat-card"><div className="stat-icon teal"><Gauge size={18}/></div><span>Aproveitamento</span><strong>{score}%</strong><small>{correct} acertos de {answered||0} respondidas</small></div><div className="stat-card"><div className="stat-icon blue"><ListChecks size={18}/></div><span>Progresso</span><strong>{answered}<small>/50</small></strong><small>questões concluídas</small></div><div className="stat-card"><div className="stat-icon coral"><BookOpenCheck size={18}/></div><span>Para revisar</span><strong>{errorList.length}</strong><small>tópicos no caderno de erros</small></div><div className="stat-card accent-card"><div className="mini-brand-mark"><img src="/manus-storage/simulado-mark_21799bc9.png" alt=""/></div><span>Meta de segurança</span><strong>80%</strong><div className="tiny-line"><i style={{width:`${Math.min(score/80*100,100)}%`}}></i></div><small>{score>=80?"Meta atingida":"Continue acumulando consistência"}</small></div></section>
+ <section className="stat-grid"><div className="stat-card"><div className="stat-icon teal"><Gauge size={18}/></div><span>Aproveitamento</span><strong>{score}%</strong><small>{correct} acertos de {answered||0} respondidas</small></div><div className="stat-card"><div className="stat-icon blue"><ListChecks size={18}/></div><span>Progresso</span><strong>{answered}<small>/50</small></strong><small>questões concluídas</small></div><div className="stat-card"><div className="stat-icon coral"><BookOpenCheck size={18}/></div><span>Para revisar</span><strong>{errorList.length}</strong><small>tópicos no caderno de erros</small></div><div className="stat-card accent-card"><div className="mini-brand-mark"><img src="/manus-storage/simulado-mark_3b0fb8a2.png" alt=""/></div><span>Meta de segurança</span><strong>80%</strong><div className="tiny-line"><i style={{width:`${Math.min(score/80*100,100)}%`}}></i></div><small>{score>=80?"Meta atingida":"Continue acumulando consistência"}</small></div></section>
  <section className="dashboard-grid"><div className="panel axis-panel"><div className="panel-head"><div><span className="section-kicker">MAPA DO EDITAL</span><h3>Desempenho por eixo</h3></div><button onClick={()=>go("desempenho")} className="link-btn">Abrir relatório <ChevronRight size={15}/></button></div>{axisStats.map(a=><div className="axis-row" key={a.axis}><div className="axis-label"><span className="axis-dot" style={{background:a.color}}></span><span>{a.axis}</span><b>{a.respondidas?`${a.percent}%`:"—"}</b></div><div className="axis-track"><span style={{width:`${a.respondidas?a.percent:0}%`,background:a.color}}></span></div><small>{a.respondidas}/{a.axis==="Gestão pública"?18:a.axis==="Pessoas e redes"?12:a.axis==="Políticas públicas"?8:12} questões</small></div>)}</div><div className="panel pie-panel"><div className="panel-head"><div><span className="section-kicker">VISÃO RÁPIDA</span><h3>Placar atual</h3></div><Sparkles size={18} color="#54B99A"/></div><div className="pie-wrap"><ResponsiveContainer width="52%" height={170}><PieChart><Pie data={pie} dataKey="value" innerRadius={53} outerRadius={75} paddingAngle={3} stroke="none">{pie.map(p=><Cell key={p.name} fill={p.color}/>)}</Pie><Tooltip/></PieChart></ResponsiveContainer><div className="pie-center"><strong>{score}%</strong><span>aproveitamento</span></div></div><div className="legend">{pie.map(p=><div key={p.name}><i style={{background:p.color}}></i><span>{p.name}</span><b>{p.value}</b></div>)}</div></div></section>
  <section className="study-line"><div className="line-head"><div><span className="section-kicker">RITMO DE PREPARAÇÃO</span><h3>Da primeira questão à reta final</h3></div><span className="line-note"><Flag size={13}/> 3 de 4 fases acompanhadas</span></div><div className="line"><div className="line-fill" style={{width:`${Math.min(answered/50*100,100)}%`}}></div>{["Diagnóstico","Cobertura","Consolidação","Reta final"].map((x,i)=><div className={`line-step ${answered>=([0,12,32,50][i])?"done":""}`} key={x}><span>{i+1}</span><small>{x}</small></div>)}</div></section>
  </div>
