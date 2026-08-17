@@ -43,4 +43,4 @@
 
 - [x] Implementar comandos rápidos no simulador no estilo do site de referência, incluindo PAINEL, REVISÃO, REFAZER, SIMULADO e FONTES.
 - [x] Adicionar teste cobrindo estabilidade e restauração da ordem salva quando há progresso.
-- [ ] Salvar novo checkpoint e publicar a atualização com embaralhamento.
+- [x] Salvar novo checkpoint e publicar a atualização com embaralhamento.
