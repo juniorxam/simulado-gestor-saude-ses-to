@@ -4,6 +4,7 @@ import { startLogin } from "@/const";
 import { trpc } from "@/lib/trpc";
 import { shouldPreferLocalProgress } from "@/lib/progressSync";
 import { createQuestionOrder, isValidQuestionOrder, resolveQuestionOrder } from "@/lib/questionOrder";
+import { createFreshProgressState } from "@/lib/progressReset";
 import { referenceQuestions } from "@/data/referenceQuestions";
 import { BarChart3, BookOpenCheck, Brain, CheckCircle2, ChevronLeft, ChevronRight, CircleHelp, Clock3, FileText, Flag, Gauge, LayoutDashboard, ListChecks, Loader2, LogIn, LogOut, RotateCcw, Settings2, Sparkles, Target, XCircle } from "lucide-react";
 import { Bar, BarChart, CartesianGrid, Cell, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
@@ -54,6 +55,7 @@ export default function Home(){
   const { user, loading: authLoading, isAuthenticated, logout } = useAuth();
   const progressQuery = trpc.progress.get.useQuery(undefined, { enabled: isAuthenticated, retry: false });
   const saveProgress = trpc.progress.save.useMutation();
+  const clearProgress = trpc.progress.clear.useMutation();
   const [questionOrder,setQuestionOrder] = useState<number[]>(() => {
     return resolveQuestionOrder(saved?.questionOrder, Object.keys(saved?.answers || {}).length > 0, blueprints.length);
   });
@@ -140,7 +142,25 @@ export default function Home(){
   function submit(){if(selected===null)return;const isCorrect=selected===q.correct;setAnswers(prev=>({...prev,[q.id]:{selected,correct:isCorrect,axis:q.axis,topic:q.topic,difficulty:q.difficulty,analysis:q.analysis}}));setShowFeedback(true);setLocalChangedAt(Date.now());toast(isCorrect?"Resposta correta":"Resposta registrada",{description:isCorrect?"Excelente. Continue nesse ritmo.":"O erro foi salvo no seu caderno de revisão."});}
   function next(){setShowFeedback(false);setSelected(null);setCurrent(Math.min(questions.length-1,current+1));setLocalChangedAt(Date.now());}
   function previous(){setShowFeedback(false);setSelected(null);setCurrent(Math.max(0,current-1));setLocalChangedAt(Date.now());}
-  function reset(){localStorage.removeItem("ses-to-simulado");setQuestionOrder(createQuestionOrder(blueprints.length));setAnswers({});setCurrent(0);setStarted(false);setShowFeedback(false);setSelected(null);setView("dashboard");setStartTime(Date.now());setLocalChangedAt(Date.now());toast.success("Progresso reiniciado",{description:"Uma nova ordem de questões foi criada."});}
+  function reset(){
+    const confirmed = window.confirm("Apagar todo o histórico de respostas, acertos, erros e progresso? As questões e sua conta serão mantidas.");
+    if (!confirmed) return;
+    const resetLocalState = () => {
+      const fresh = createFreshProgressState(blueprints.length, Date.now());
+      localStorage.removeItem("ses-to-simulado");
+      setQuestionOrder(fresh.questionOrder);
+      setAnswers({}); setCurrent(fresh.current); setStarted(fresh.started); setShowFeedback(fresh.showFeedback); setSelected(fresh.selected);
+      setView(fresh.view); setStartTime(fresh.startTime); setElapsed(fresh.elapsed); setLocalChangedAt(fresh.localChangedAt);
+      setSyncStatus(isAuthenticated ? "synced" : "local");
+      toast.success("Histórico apagado",{description:"O simulado foi reiniciado com uma nova ordem de questões."});
+    };
+    if (!isAuthenticated) { resetLocalState(); return; }
+    setSyncStatus("loading");
+    clearProgress.mutate(undefined, {
+      onSuccess: resetLocalState,
+      onError: () => { setSyncStatus("error"); toast.error("Não foi possível apagar o histórico na nuvem",{description:"Seu progresso não foi alterado."}); },
+    });
+  }
   function go(v:typeof view){setView(v); if(v==="simulado"&&!started)begin();}
   function runCommand(raw:string){
     const value = raw.trim().toUpperCase();
@@ -160,7 +180,7 @@ export default function Home(){
       <div className="brand"><img src="/manus-storage/simulado-mark_3b0fb8a2.png" alt=""/><div><span>SIMULADO</span><strong>GESTOR EM SAÚDE</strong></div></div>
       <div className="exam-tag">SES-TO · 2026</div>
       <nav className="nav">{[["dashboard","Visão geral",LayoutDashboard],["simulado","Simulado",ListChecks],["desempenho","Desempenho",BarChart3],["erros","Caderno de erros",BookOpenCheck],["fontes","Fontes de estudo",FileText]].map(([id,label,Icon])=><button key={id as string} className={view===id?"active":""} onClick={()=>go(id as typeof view)}><Icon size={18}/><span>{label as string}</span>{id==="erros"&&errorList.length>0&&<b>{errorList.length}</b>}</button>)}</nav>
-      <div className="sidebar-bottom"><div className="mini-progress"><span>Progresso geral</span><strong>{answered}/50</strong><Progress value={answered/50*100}/></div><button className="reset-link" onClick={reset}><RotateCcw size={15}/> Reiniciar progresso</button></div>
+      <div className="sidebar-bottom"><div className="mini-progress"><span>Progresso geral</span><strong>{answered}/50</strong><Progress value={answered/50*100}/></div><button className="reset-link" onClick={reset} disabled={clearProgress.isPending}><RotateCcw size={15}/> {clearProgress.isPending?"Apagando histórico…":"Apagar histórico"}</button></div>
     </aside>
     <main className="main-area">
       <header className="topbar"><div className="topbar-title"><div className="topbar-mark"><img src="/manus-storage/simulado-mark_3b0fb8a2.png" alt=""/></div><div><span className="eyebrow">PAINEL DE PREPARAÇÃO</span><h1>{view==="dashboard"?"Seu próximo ganho está nos erros recorrentes.":view==="simulado"?"Simulado específico · Questões FGV":view==="desempenho"?"Desempenho por eixo do edital":view==="erros"?"Caderno de erros": "Fontes que sustentam o estudo"}</h1></div></div><div className="top-actions"><div className="time-chip"><Clock3 size={16}/><span>{formatTime(elapsed)}</span></div>{authLoading?<Loader2 size={17} className="spin"/>:isAuthenticated?<div className="user-chip"><span>{user?.name || user?.email || "Conta conectada"}</span><button onClick={()=>logout()} aria-label="Sair"><LogOut size={14}/></button></div>:<Button variant="outline" onClick={startLogin}><LogIn size={15}/> Entrar para salvar</Button>}{isAuthenticated&&<span className={`sync-indicator ${syncStatus}`} title="Status da sincronização">{syncStatus==="loading"?"Sincronizando…":syncStatus==="error"?"Não sincronizado":"Sincronizado"}</span>}<Button variant="outline" size="icon" aria-label="Configurações"><Settings2 size={17}/></Button></div></header>

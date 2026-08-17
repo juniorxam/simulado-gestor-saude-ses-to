@@ -61,4 +61,20 @@
 - [x] Revisar manualmente os 50 temas atribuídos às questões e corrigir rótulos genéricos ou inadequados.
 - [x] Salvar novo checkpoint e publicar a versão final com o banco do site de referência.
 
-- [ ] Publicar a versão final após a migração e revisão dos 50 temas do banco de referência.
+- [x] Publicar a versão final após a migração e revisão dos 50 temas do banco de referência.
+
+- [x] Definir o reset como limpeza de respostas, pontuação, caderno de erros, posição, tempo e ordem da sessão, preservando conta e questões.
+- [x] Criar procedimento protegido para apagar o progresso remoto do usuário.
+- [x] Adicionar confirmação visual e botão separado para limpar histórico.
+- [x] Testar limpeza local, remota e geração de nova ordem de questões.
+- [x] Publicar a atualização e orientar o uso.
+
+- [x] Adicionar testes do fluxo completo de limpar histórico: reset local, chamada remota bem-sucedida e nova ordem.
+- [x] Validar no navegador que respostas, acertos e erros desaparecem sem apagar a conta.
+- [x] Salvar checkpoint/publicar a função de apagar histórico.
+- [x] Enviar instruções finais de uso do botão e do efeito local/nuvem.
+
+- [x] Criar uma função pura de estado inicial do reset e testá-la junto com a chamada protegida `progress.clear`.
+- [x] Confirmar visualmente o estado zerado e a conta conectada após o reset.
+- [x] Publicar um checkpoint após a implementação do apagar histórico.
+- [x] Entregar as instruções finais ao usuário.

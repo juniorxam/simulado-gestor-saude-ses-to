@@ -16,6 +16,11 @@ describe("progress procedures", () => {
     await expect(caller.progress.get()).rejects.toMatchObject({ code: "UNAUTHORIZED" });
   });
 
+  it("rejects cloud progress clearing without an authenticated user", async () => {
+    const caller = appRouter.createCaller(createContext(null));
+    await expect(caller.progress.clear()).rejects.toMatchObject({ code: "UNAUTHORIZED" });
+  });
+
   it("rejects an empty progress payload before reaching persistence", async () => {
     const user = {
       id: 42,

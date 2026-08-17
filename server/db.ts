@@ -55,6 +55,12 @@ export async function getStudyProgress(userId: number) {
   return result[0] ?? null;
 }
 
+export async function clearStudyProgress(userId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database is not available");
+  await db.delete(studyProgress).where(eq(studyProgress.userId, userId));
+}
+
 export async function upsertStudyProgress(userId: number, payload: string) {
   const db = await getDb();
   if (!db) throw new Error("Database is not available");

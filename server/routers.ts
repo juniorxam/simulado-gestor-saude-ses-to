@@ -3,7 +3,7 @@ import { COOKIE_NAME } from "@shared/const";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
 import { protectedProcedure, publicProcedure, router } from "./_core/trpc";
-import { getStudyProgress, upsertStudyProgress } from "./db";
+import { clearStudyProgress, getStudyProgress, upsertStudyProgress } from "./db";
 
 export const appRouter = router({
   system: systemRouter,
@@ -26,6 +26,10 @@ export const appRouter = router({
         const row = await upsertStudyProgress(ctx.user.id, input.payload);
         return row ? { payload: row.payload, updatedAt: row.updatedAt } : null;
       }),
+    clear: protectedProcedure.mutation(async ({ ctx }) => {
+      await clearStudyProgress(ctx.user.id);
+      return { success: true } as const;
+    }),
   }),
 });
 
