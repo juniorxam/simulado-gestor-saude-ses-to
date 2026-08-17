@@ -78,3 +78,13 @@
 - [x] Confirmar visualmente o estado zerado e a conta conectada após o reset.
 - [x] Publicar um checkpoint após a implementação do apagar histórico.
 - [x] Entregar as instruções finais ao usuário.
+
+- [x] Auditar a interface atual e definir as melhorias prioritárias de estudo.
+- [x] Criar uma área visível de Configurações/Minha conta com o apagar histórico.
+- [x] Adicionar confirmação explícita e feedback de conclusão do reset.
+- [x] Implementar melhorias prioritárias para diagnóstico, revisão e modo prova.
+- [x] Testar, publicar e orientar o novo fluxo.
+
+- [x] Implementar um plano automático de revisão baseado nos temas com mais erros.
+- [x] Publicar o novo painel de configurações e o plano de revisão.
+- [x] Entregar ao usuário instruções finais sobre o novo fluxo e as prioridades de estudo.
