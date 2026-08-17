@@ -88,3 +88,11 @@
 - [x] Implementar um plano automático de revisão baseado nos temas com mais erros.
 - [x] Publicar o novo painel de configurações e o plano de revisão.
 - [x] Entregar ao usuário instruções finais sobre o novo fluxo e as prioridades de estudo.
+
+- [x] Adicionar na Visão geral um painel visível de controle do progresso com o botão Apagar histórico.
+- [x] Validar visualmente desktop/mobile e confirmar que o reset continua local e remoto.
+- [x] Publicar a atualização e orientar o novo local do botão.
+
+- [x] Capturar a Visão geral em desktop e mobile após mover o botão.
+- [x] Validar o fluxo do reset a partir da Visão geral e confirmar a limpeza local/remota.
+- [x] Publicar o checkpoint da nova localização e orientar o usuário.
