@@ -44,3 +44,21 @@
 - [x] Implementar comandos rápidos no simulador no estilo do site de referência, incluindo PAINEL, REVISÃO, REFAZER, SIMULADO e FONTES.
 - [x] Adicionar teste cobrindo estabilidade e restauração da ordem salva quando há progresso.
 - [x] Salvar novo checkpoint e publicar a atualização com embaralhamento.
+
+- [x] Analisar o site de referência e identificar o formato do banco de questões.
+- [x] Confirmar a origem/autorização do conteúdo antes de reproduzir integralmente as questões.
+- [x] Mapear perguntas, alternativas, gabaritos, comentários e temas para o simulador.
+- [x] Substituir o banco atual preservando embaralhamento, respostas, correção e desempenho.
+- [x] Testar o novo banco e publicar a atualização.
+
+- [x] Mapear e exibir os comentários por alternativa do banco de referência na correção do simulador.
+- [x] Adicionar e exibir um tema específico por questão, além do eixo geral.
+
+- [x] Publicar um novo checkpoint após a migração das 50 questões do site de referência.
+- [x] Exibir na correção os comentários das quatro alternativas, não apenas da alternativa escolhida.
+- [x] Adicionar um tema real por questão no banco importado e exibi-lo na interface.
+
+- [x] Revisar manualmente os 50 temas atribuídos às questões e corrigir rótulos genéricos ou inadequados.
+- [x] Salvar novo checkpoint e publicar a versão final com o banco do site de referência.
+
+- [ ] Publicar a versão final após a migração e revisão dos 50 temas do banco de referência.
