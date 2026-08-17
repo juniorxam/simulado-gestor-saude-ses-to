@@ -3,6 +3,7 @@ import { useAuth } from "@/_core/hooks/useAuth";
 import { startLogin } from "@/const";
 import { trpc } from "@/lib/trpc";
 import { shouldPreferLocalProgress } from "@/lib/progressSync";
+import { createQuestionOrder, isValidQuestionOrder, resolveQuestionOrder } from "@/lib/questionOrder";
 import { BarChart3, BookOpenCheck, Brain, CheckCircle2, ChevronLeft, ChevronRight, CircleHelp, Clock3, FileText, Flag, Gauge, LayoutDashboard, ListChecks, Loader2, LogIn, LogOut, RotateCcw, Settings2, Sparkles, Target, XCircle } from "lucide-react";
 import { Bar, BarChart, CartesianGrid, Cell, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { Button } from "@/components/ui/button";
@@ -74,7 +75,7 @@ const blueprints: Array<{axis:Axis;topic:string;difficulty:Question["difficulty"
  {axis:"Políticas públicas",topic:"Equidade",difficulty:"Difícil",prompt:"Uma avaliação de política de saúde orientada pela equidade deve considerar:",options:["Como resultados e acesso se distribuem entre diferentes grupos e territórios","Somente a média estadual","Apenas o gasto total","Exclusivamente o número de unidades"],correct:0,explanation:"Equidade exige observar distribuição de acesso, resultados e necessidades entre grupos e territórios.",source:"Gestão do SUS — Ministério da Saúde"},
 ];
 
-const questions: Question[] = blueprints.map((q,i)=>({id:i+1,...q}));
+const questionById = new Map(blueprints.map((q, index) => [index + 1, { id: index + 1, ...q }]));
 
 const initialStore = () => {
   try { return JSON.parse(localStorage.getItem("ses-to-simulado") || "null"); } catch { return null; }
@@ -85,6 +86,10 @@ export default function Home(){
   const { user, loading: authLoading, isAuthenticated, logout } = useAuth();
   const progressQuery = trpc.progress.get.useQuery(undefined, { enabled: isAuthenticated, retry: false });
   const saveProgress = trpc.progress.save.useMutation();
+  const [questionOrder,setQuestionOrder] = useState<number[]>(() => {
+    return resolveQuestionOrder(saved?.questionOrder, Object.keys(saved?.answers || {}).length > 0, blueprints.length);
+  });
+  const questions = useMemo(() => questionOrder.map(id => questionById.get(id)!).filter(Boolean), [questionOrder]);
   const [view,setView] = useState<"dashboard"|"simulado"|"desempenho"|"erros"|"fontes">(saved?.view || "dashboard");
   const [current,setCurrent] = useState<number>(saved?.current || 0);
   const [answers,setAnswers] = useState<Record<number,Answer>>(saved?.answers || {});
@@ -96,7 +101,8 @@ export default function Home(){
   const [localChangedAt,setLocalChangedAt] = useState<number>(saved?.localChangedAt || Date.now());
   const [cloudLoaded,setCloudLoaded] = useState(false);
   const [syncStatus,setSyncStatus] = useState<"local"|"loading"|"synced"|"error">("local");
-  const snapshot = useMemo(() => ({view,current,answers,started,showFeedback,selected,startTime,localChangedAt}), [view,current,answers,started,showFeedback,selected,startTime,localChangedAt]);
+  const [command,setCommand] = useState("");
+  const snapshot = useMemo(() => ({view,current,answers,started,showFeedback,selected,startTime,localChangedAt,questionOrder}), [view,current,answers,started,showFeedback,selected,startTime,localChangedAt,questionOrder]);
 
   useEffect(()=>{ localStorage.setItem("ses-to-simulado",JSON.stringify(snapshot)); },[snapshot]);
   useEffect(()=>{
@@ -126,6 +132,7 @@ export default function Home(){
           if (typeof remote.selected === "number" || remote.selected === null) setSelected(remote.selected);
           if (typeof remote.startTime === "number") setStartTime(remote.startTime);
           if (typeof remote.localChangedAt === "number") setLocalChangedAt(remote.localChangedAt);
+          if (isValidQuestionOrder(remote.questionOrder, blueprints.length)) setQuestionOrder(remote.questionOrder);
           setSyncStatus("synced");
           toast.success("Progresso sincronizado", { description: "Seu estudo em nuvem foi carregado nesta sessão." });
         }
@@ -165,8 +172,20 @@ export default function Home(){
   function submit(){if(selected===null)return;const isCorrect=selected===q.correct;setAnswers(prev=>({...prev,[q.id]:{selected,correct:isCorrect,axis:q.axis,topic:q.topic,difficulty:q.difficulty}}));setShowFeedback(true);setLocalChangedAt(Date.now());toast(isCorrect?"Resposta correta":"Resposta registrada",{description:isCorrect?"Excelente. Continue nesse ritmo.":"O erro foi salvo no seu caderno de revisão."});}
   function next(){setShowFeedback(false);setSelected(null);setCurrent(Math.min(questions.length-1,current+1));setLocalChangedAt(Date.now());}
   function previous(){setShowFeedback(false);setSelected(null);setCurrent(Math.max(0,current-1));setLocalChangedAt(Date.now());}
-  function reset(){localStorage.removeItem("ses-to-simulado");setAnswers({});setCurrent(0);setStarted(false);setShowFeedback(false);setSelected(null);setView("dashboard");setStartTime(Date.now());setLocalChangedAt(Date.now());toast.success("Progresso reiniciado");}
+  function reset(){localStorage.removeItem("ses-to-simulado");setQuestionOrder(createQuestionOrder(blueprints.length));setAnswers({});setCurrent(0);setStarted(false);setShowFeedback(false);setSelected(null);setView("dashboard");setStartTime(Date.now());setLocalChangedAt(Date.now());toast.success("Progresso reiniciado",{description:"Uma nova ordem de questões foi criada."});}
   function go(v:typeof view){setView(v); if(v==="simulado"&&!started)begin();}
+  function runCommand(raw:string){
+    const value = raw.trim().toUpperCase();
+    if (!value) return;
+    if (value === "PAINEL" || value === "DASHBOARD") go("dashboard");
+    else if (value === "REVISÃO" || value === "REVISAO" || value === "REFAZER") go(value === "REFAZER" ? "erros" : "desempenho");
+    else if (value === "SIMULADO" || value === "CONTINUAR") go("simulado");
+    else if (value === "FONTES") go("fontes");
+    else if (value === "FINALIZAR") go("desempenho");
+    else if (value === "PAUSA") toast("Sessão pausada",{description:"Seu progresso continua salvo. Retome quando quiser."});
+    else toast.info("Comando não reconhecido",{description:"Use PAINEL, REVISÃO, REFAZER, SIMULADO ou FONTES."});
+    setCommand("");
+  }
 
   return <div className="app-shell">
     <aside className="sidebar">
@@ -177,8 +196,9 @@ export default function Home(){
     </aside>
     <main className="main-area">
       <header className="topbar"><div className="topbar-title"><div className="topbar-mark"><img src="/manus-storage/simulado-mark_3b0fb8a2.png" alt=""/></div><div><span className="eyebrow">PAINEL DE PREPARAÇÃO</span><h1>{view==="dashboard"?"Seu próximo ganho está nos erros recorrentes.":view==="simulado"?"Simulado específico · Questões FGV":view==="desempenho"?"Desempenho por eixo do edital":view==="erros"?"Caderno de erros": "Fontes que sustentam o estudo"}</h1></div></div><div className="top-actions"><div className="time-chip"><Clock3 size={16}/><span>{formatTime(elapsed)}</span></div>{authLoading?<Loader2 size={17} className="spin"/>:isAuthenticated?<div className="user-chip"><span>{user?.name || user?.email || "Conta conectada"}</span><button onClick={()=>logout()} aria-label="Sair"><LogOut size={14}/></button></div>:<Button variant="outline" onClick={startLogin}><LogIn size={15}/> Entrar para salvar</Button>}{isAuthenticated&&<span className={`sync-indicator ${syncStatus}`} title="Status da sincronização">{syncStatus==="loading"?"Sincronizando…":syncStatus==="error"?"Não sincronizado":"Sincronizado"}</span>}<Button variant="outline" size="icon" aria-label="Configurações"><Settings2 size={17}/></Button></div></header>
+      <div className="reference-command-bar"><span><strong>Comandos:</strong> PAINEL · REVISÃO · REFAZER · SIMULADO · PAUSA · CONTINUAR · FONTES · FINALIZAR</span><form onSubmit={(event)=>{event.preventDefault();runCommand(command);}}><input value={command} onChange={(event)=>setCommand(event.target.value)} placeholder="Digite um comando" aria-label="Digite um comando"/><button type="submit">Executar</button></form></div>
       {view==="dashboard"&&<Dashboard answered={answered} correct={correct} score={score} axisStats={axisStats} pie={pie} begin={begin} go={go} errorList={errorList}/>} 
-      {view==="simulado"&&<Quiz q={q} current={current} answers={answers} selected={selected} showFeedback={showFeedback} choose={choose} submit={submit} next={next} previous={previous} score={score} answered={answered} goTo={(index)=>{setCurrent(index);setShowFeedback(Boolean(answers[questions[index].id]));setSelected(answers[questions[index].id]?.selected ?? null);}}/>} 
+      {view==="simulado"&&<Quiz questions={questions} q={q} current={current} answers={answers} selected={selected} showFeedback={showFeedback} choose={choose} submit={submit} next={next} previous={previous} score={score} answered={answered} goTo={(index)=>{setCurrent(index);setShowFeedback(Boolean(answers[questions[index].id]));setSelected(answers[questions[index].id]?.selected ?? null);}}/>} 
       {view==="desempenho"&&<Performance axisStats={axisStats} answered={answered} correct={correct} score={score} pie={pie}/>} 
       {view==="erros"&&<Errors errorList={errorList} answers={answers} questions={questions}/>} 
       {view==="fontes"&&<Sources/>}
@@ -194,7 +214,7 @@ function Dashboard({answered,correct,score,axisStats,pie,begin,go,errorList}:{an
  </div>
 }
 
-function Quiz({q,current,answers,selected,showFeedback,choose,submit,next,previous,score,answered,goTo}:{q:Question;current:number;answers:Record<number,Answer>;selected:number|null;showFeedback:boolean;choose:(i:number)=>void;submit:()=>void;next:()=>void;previous:()=>void;score:number;answered:number;goTo:(index:number)=>void}){
+function Quiz({questions,q,current,answers,selected,showFeedback,choose,submit,next,previous,score,answered,goTo}:{questions:Question[];q:Question;current:number;answers:Record<number,Answer>;selected:number|null;showFeedback:boolean;choose:(i:number)=>void;submit:()=>void;next:()=>void;previous:()=>void;score:number;answered:number;goTo:(index:number)=>void}){
  const existing=answers[q.id]; const picked=selected!==null?selected:existing?.selected??null;
  return <div className="quiz-layout"><section className="quiz-main"><div className="question-meta"><div><span className="question-number">QUESTÃO {String(q.id).padStart(2,"0")}</span><Badge className="axis-badge">{q.axis}</Badge><Badge variant="outline">{q.difficulty}</Badge></div><span className="question-topic">{q.topic}</span></div><div className="question-card"><div className="prompt">{q.prompt}</div><div className="options">{q.options.map((op,i)=><button key={op} className={`option ${picked===i?"selected":""} ${showFeedback&&i===q.correct?"correct":""} ${showFeedback&&picked===i&&i!==q.correct?"wrong":""}`} onClick={()=>choose(i)}><span className="option-letter">{String.fromCharCode(65+i)}</span><span>{op}</span>{showFeedback&&i===q.correct&&<CheckCircle2 className="option-state" size={19}/>} {showFeedback&&picked===i&&i!==q.correct&&<XCircle className="option-state" size={19}/>}</button>)}</div><div className="question-footer"><span><CircleHelp size={16}/> Escolha uma alternativa para continuar</span><span>{q.source}</span></div></div>{showFeedback&&<div className={`feedback ${picked===q.correct?"good":"bad"}`}><div className="feedback-title">{picked===q.correct?<><CheckCircle2 size={20}/> Resposta correta</>:<><XCircle size={20}/> Resposta registrada para revisão</>}</div><p>{q.explanation}</p><div className="feedback-source"><FileText size={15}/> Base: {q.source}</div></div>}<div className="quiz-actions"><Button variant="outline" onClick={previous} disabled={current===0}><ChevronLeft size={16}/> Anterior</Button>{!showFeedback?<Button onClick={submit} disabled={selected===null} className="primary-btn">Confirmar resposta <ChevronRight size={16}/></Button>:<Button onClick={next} className="primary-btn">{current===49?"Ver resultado":"Próxima questão"} <ChevronRight size={16}/></Button>}</div></section><aside className="quiz-rail"><div className="rail-summary"><span className="section-kicker">PROGRESSO</span><strong>{answered}<small>/50</small></strong><Progress value={answered/50*100}/><div className="rail-score"><span>Aproveitamento</span><b>{score}%</b></div></div><div className="rail-questions"><div className="rail-title"><span>Mapa de questões</span><span>{current+1}/50</span></div><div className="question-grid">{questions.map((item,i)=>{const a=answers[item.id];return <button key={item.id} onClick={()=>goTo(i)} className={`${i===current?"current":""} ${a?.correct?"answered-correct":""} ${a&&!a.correct?"answered-wrong":""}`} title={`Questão ${item.id}`}>{item.id}</button>})}</div></div><div className="rail-tip"><Brain size={17}/><span><b>Nota de campo</b> Corrija o raciocínio, não apenas a letra.</span></div></aside></div>
 }

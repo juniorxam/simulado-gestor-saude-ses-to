@@ -16,5 +16,31 @@
 - [x] Exibir indicador visível de sincronização no cabeçalho e tratar erro no primeiro salvamento quando não houver progresso remoto.
 - [x] Adicionar teste de conflito entre duas sessões do mesmo usuário usando precedência baseada em updatedAt.
 
-- [ ] Salvar um novo checkpoint após a integração de autenticação/nuvem.
-- [ ] Entregar ao usuário instruções de primeiro login, migração do progresso local e limitações da sincronização.
+- [x] Salvar um novo checkpoint após a integração de autenticação/nuvem.
+- [x] Entregar ao usuário instruções de primeiro login, migração do progresso local e limitações da sincronização.
+
+- [x] Enviar ao usuário uma mensagem final com instruções de primeiro login, migração do progresso local e limitações da sincronização.
+
+- [x] Mapear a apostila aos quatro eixos e aos tópicos específicos de Gestor em Saúde.
+- [x] Redigir a apostila em Markdown com linguagem adequada para leitura e áudio no NotebookLM.
+- [x] Criar prompts para podcasts diários, revisão, perguntas e simulados.
+- [x] Revisar fontes, estrutura e entregar os arquivos finais.
+
+- [x] Fazer uma revisão final explícita dos arquivos da apostila e do kit, conferindo estrutura, referências e adequação ao NotebookLM.
+- [x] Entregar ao usuário os arquivos finais da apostila e do kit de prompts/podcast em uma mensagem de resultado com os anexos corretos.
+
+- [x] Revisar integralmente a apostila e o kit final, conferindo todo o conteúdo, a seção de referências e as instruções de uso no NotebookLM.
+- [x] Enviar ao usuário uma mensagem final de resultado com os arquivos da apostila e do kit anexados.
+
+- [x] Revisar integralmente a apostila e o kit, lendo todo o conteúdo final e conferindo coerência, referências, instruções de uso no NotebookLM e alinhamento com os quatro eixos do questionário.
+- [x] Enviar ao usuário uma mensagem final de resultado com os arquivos da apostila e do kit anexados.
+
+- [x] Reproduzir no simulador o modelo de prova do site de referência: cabeçalho compacto, contador, questão central, alternativas, navegação, painel, revisão e comandos.
+- [x] Embaralhar a ordem das 50 questões a cada nova abertura ou novo simulado, mantendo a sequência durante a sessão atual.
+- [x] Preservar respostas, correção, caderno de erros, autenticação e sincronização sem quebrar o histórico.
+- [x] Adicionar testes para embaralhamento, estabilidade da ordem na sessão e restauração do progresso.
+- [x] Validar desktop/mobile e publicar a atualização.
+
+- [x] Implementar comandos rápidos no simulador no estilo do site de referência, incluindo PAINEL, REVISÃO, REFAZER, SIMULADO e FONTES.
+- [x] Adicionar teste cobrindo estabilidade e restauração da ordem salva quando há progresso.
+- [ ] Salvar novo checkpoint e publicar a atualização com embaralhamento.
