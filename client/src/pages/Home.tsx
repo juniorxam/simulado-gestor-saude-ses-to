@@ -5,6 +5,7 @@ import { trpc } from "@/lib/trpc";
 import { shouldPreferLocalProgress } from "@/lib/progressSync";
 import { createQuestionOrder, isValidQuestionOrder, resolveQuestionOrder } from "@/lib/questionOrder";
 import { createFreshProgressState } from "@/lib/progressReset";
+import { applyAlternativeOrder, createAlternativeOrders, resolveAlternativeOrders, isValidAlternativeOrder } from "@/lib/alternativeOrder";
 import { referenceQuestions } from "@/data/referenceQuestions";
 import { BarChart3, BookOpenCheck, Brain, CheckCircle2, ChevronLeft, ChevronRight, CircleHelp, Clock3, FileText, Flag, Gauge, LayoutDashboard, ListChecks, Loader2, LogIn, LogOut, RotateCcw, Settings2, Sparkles, Target, XCircle } from "lucide-react";
 import { Bar, BarChart, CartesianGrid, Cell, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
@@ -32,7 +33,8 @@ const axisMap: Record<string, Axis> = {
   "Eixo 4 — Auditoria e legislação aplicada": "Auditoria e legislação",
 };
 
-const blueprints = referenceQuestions.map((item) => ({
+const blueprints = referenceQuestions.map((item, index) => ({
+  id: index + 1,
   axis: axisMap[item.axis],
   topic: item.topic,
   difficulty: item.difficulty,
@@ -44,7 +46,7 @@ const blueprints = referenceQuestions.map((item) => ({
   source: item.source,
 }));
 
-const questionById = new Map(blueprints.map((q, index) => [index + 1, { id: index + 1, ...q }]));
+const questionById = new Map(blueprints.map((q) => [q.id, q]));
 
 const initialStore = () => {
   try { return JSON.parse(localStorage.getItem("ses-to-simulado") || "null"); } catch { return null; }
@@ -59,7 +61,8 @@ export default function Home(){
   const [questionOrder,setQuestionOrder] = useState<number[]>(() => {
     return resolveQuestionOrder(saved?.questionOrder, Object.keys(saved?.answers || {}).length > 0, blueprints.length);
   });
-  const questions = useMemo(() => questionOrder.map(id => questionById.get(id)!).filter(Boolean), [questionOrder]);
+  const [alternativeOrders,setAlternativeOrders] = useState<Record<number,number[]>>(() => resolveAlternativeOrders(saved?.alternativeOrders, Object.keys(saved?.answers || {}).length > 0, blueprints));
+  const questions = useMemo(() => questionOrder.map(id => questionById.get(id)!).filter(Boolean).map(question => applyAlternativeOrder(question, alternativeOrders[question.id] ?? question.options.map((_, index) => index))), [questionOrder, alternativeOrders]);
   const [view,setView] = useState<"dashboard"|"simulado"|"desempenho"|"erros"|"fontes">(saved?.view || "dashboard");
   const [current,setCurrent] = useState<number>(saved?.current || 0);
   const [answers,setAnswers] = useState<Record<number,Answer>>(saved?.answers || {});
@@ -73,7 +76,7 @@ export default function Home(){
   const [syncStatus,setSyncStatus] = useState<"local"|"loading"|"synced"|"error">("local");
   const [command,setCommand] = useState("");
   const [showSettings,setShowSettings] = useState(false);
-  const snapshot = useMemo(() => ({view,current,answers,started,showFeedback,selected,startTime,localChangedAt,questionOrder}), [view,current,answers,started,showFeedback,selected,startTime,localChangedAt,questionOrder]);
+  const snapshot = useMemo(() => ({view,current,answers,started,showFeedback,selected,startTime,localChangedAt,questionOrder,alternativeOrders}), [view,current,answers,started,showFeedback,selected,startTime,localChangedAt,questionOrder,alternativeOrders]);
 
   useEffect(()=>{ localStorage.setItem("ses-to-simulado",JSON.stringify(snapshot)); },[snapshot]);
   useEffect(()=>{
@@ -104,6 +107,7 @@ export default function Home(){
           if (typeof remote.startTime === "number") setStartTime(remote.startTime);
           if (typeof remote.localChangedAt === "number") setLocalChangedAt(remote.localChangedAt);
           if (isValidQuestionOrder(remote.questionOrder, blueprints.length)) setQuestionOrder(remote.questionOrder);
+          setAlternativeOrders(resolveAlternativeOrders(remote.alternativeOrders, Object.keys(remote.answers || {}).length > 0, blueprints));
           setSyncStatus("synced");
           toast.success("Progresso sincronizado", { description: "Seu estudo em nuvem foi carregado nesta sessão." });
         }
@@ -150,6 +154,7 @@ export default function Home(){
       const fresh = createFreshProgressState(blueprints.length, Date.now());
       localStorage.removeItem("ses-to-simulado");
       setQuestionOrder(fresh.questionOrder);
+      setAlternativeOrders(createAlternativeOrders(blueprints));
       setAnswers({}); setCurrent(fresh.current); setStarted(fresh.started); setShowFeedback(fresh.showFeedback); setSelected(fresh.selected);
       setView(fresh.view); setStartTime(fresh.startTime); setElapsed(fresh.elapsed); setLocalChangedAt(fresh.localChangedAt);
       setSyncStatus(isAuthenticated ? "synced" : "local");

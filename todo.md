@@ -96,3 +96,12 @@
 - [x] Capturar a Visão geral em desktop e mobile após mover o botão.
 - [x] Validar o fluxo do reset a partir da Visão geral e confirmar a limpeza local/remota.
 - [x] Publicar o checkpoint da nova localização e orientar o usuário.
+
+- [x] Criar uma ordem de alternativas por questão e persistir essa ordem durante a sessão.
+- [x] Embaralhar alternativas em nova sessão/reset e remapear gabarito e comentários.
+- [x] Testar que as letras corretas variam, sem alterar a resposta conceitualmente correta.
+- [x] Validar restauração do progresso, publicar e orientar o usuário.
+
+- [x] Validar explicitamente a restauração de `alternativeOrders` em progresso local e remoto.
+- [x] Publicar o checkpoint com alternativas embaralhadas por sessão.
+- [x] Orientar o usuário sobre nova sessão, reset e preservação da ordem durante o estudo.
