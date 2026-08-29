@@ -9,4 +9,14 @@ describe("reference question bank", () => {
     expect(referenceQuestions.every(question => question.options.length === 4 && question.correct >= 0 && question.correct < 4)).toBe(true);
     expect(referenceQuestions.every(question => question.prompt && question.explanation && question.source)).toBe(true);
   });
+
+  it("distributes correct answers across all four alternative positions", () => {
+    const counts = referenceQuestions.reduce((acc, question) => {
+      acc[question.correct] += 1;
+      return acc;
+    }, [0, 0, 0, 0]);
+
+    expect(counts).toEqual([13, 13, 12, 12]);
+    expect(new Set(referenceQuestions.map(question => question.correct)).size).toBe(4);
+  });
 });
