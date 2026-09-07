@@ -1,0 +1,43 @@
+meu_projeto/
+├── app/
+│   ├── __init__.py
+│   ├── models/
+│   │   ├── __init__.py
+│   │   ├── servidor.py
+│   │   ├── dap.py
+│   │   ├── ppp.py
+│   │   ├── ltcate.py
+│   │   ├── afastamento.py
+│   │   ├── exame.py
+│   │   ├── evento.py
+│   │   └── usuario.py
+│   ├── routes/
+│   │   ├── __init__.py
+│   │   ├── equipe.py
+│   │   ├── auth.py
+│   │   └── main.py
+│   ├── templates/
+│   │   ├── base.html
+│   │   ├── equipe/
+│   │   │   ├── listar.html
+│   │   │   └── cadastrar.html
+│   │   ├── auth/
+│   │   │   ├── login.html
+│   │   │   └── registro.html
+│   │   └── index.html
+│   ├── static/
+│   │   ├── css/
+│   │   │   └── style.css
+│   │   └── js/
+│   │       └── main.js
+│   ├── forms/
+│   │   ├── __init__.py
+│   │   ├── equipe.py
+│   │   └── auth.py
+│   └── config.py
+├── migrations/
+├── .env
+├── .flaskenv
+├── requirements.txt
+├── run.py
+└── README.md
